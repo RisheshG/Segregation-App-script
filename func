@@ -1,0 +1,80 @@
+function divideIntoChunks() {
+  const U = [
+    'rishesh.gangwar1@xemailverify.com',
+    'rishesh.certificates@gmail.com'
+  ];
+
+  const currentUser = Session.getActiveUser().getEmail();
+  
+  if (!U.includes(currentUser)) {
+    const ui = SpreadsheetApp.getUi();
+    ui.alert("You are not authorized to run this script.");
+    return; // Exit the script if the user is not authorized
+  }
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const data = sheet.getDataRange().getValues();
+  const header = data[0];
+  const rows = data.slice(1);
+  const ui = SpreadsheetApp.getUi();
+  const totalPartsResponse = ui.prompt("Enter the number of parts to divide the sheet into:");
+  const totalParts = parseInt(totalPartsResponse.getResponseText(), 10);
+  if (isNaN(totalParts) || totalParts <= 0) {
+    ui.alert("Invalid input. Please enter a positive number.");
+    return;
+  }
+  const prefixResponse = ui.prompt("Enter the prefix for file naming (e.g., Jan or Feb etc.):");
+  const prefix = prefixResponse.getResponseText().trim();
+  if (!prefix) {
+    ui.alert("Invalid input. Please enter a valid prefix.");
+    return;
+  }
+  const numberingResponse = ui.prompt("Enter the numbering format (e.g., 'T1-28' for Jan'25_AF_T1 to Jan'25_AF_T28, 'TF28-39, TF1-40'):");
+  const numberingInput = numberingResponse.getResponseText().trim();
+  let fileNumbers = [];
+  numberingInput.split(',').forEach(range => {
+    range = range.trim();
+    const match = range.match(/([A-Za-z]*)(\d+)-?(\d+)?/);
+    if (match) {
+      const prefixPart = match[1];
+      const start = parseInt(match[2], 10);
+      const end = match[3] ? parseInt(match[3], 10) : start;
+      if (!isNaN(start) && !isNaN(end) && start <= end) {
+        for (let i = start; i <= end; i++) {
+          fileNumbers.push(`${prefixPart}${i}`);
+        }
+      } else {
+        ui.alert(`Invalid range input: '${range}'. Please enter a valid range (e.g., 'TF28-39, TF1-40').`);
+        return;
+      }
+    } else {
+      ui.alert(`Invalid input format: '${range}'. Please use valid range format (e.g., 'TF28-39, TF1-40').`);
+      return;
+    }
+  });
+  if (fileNumbers.length !== totalParts) {
+    ui.alert(`The number of parts (${totalParts}) and the number of filenames (${fileNumbers.length}) do not match.`);
+    return;
+  }
+  const fileNames = fileNumbers.map(num => `${prefix}'25_AF_${num}`);
+  const chunkSize = Math.ceil(rows.length / totalParts);
+  for (let i = 0; i < totalParts; i++) {
+    if (i >= fileNames.length) break;
+    const start = i * chunkSize;
+    const end = Math.min(start + chunkSize, rows.length);
+    const chunkData = rows.slice(start, end);
+    if (chunkData.length === 0) break;
+    const chunkSheetName = fileNames[i];
+    let chunkSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(chunkSheetName);
+    if (!chunkSheet) {
+      chunkSheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(chunkSheetName);
+    } else {
+      chunkSheet.clear();
+    }
+    chunkSheet.getRange(1, 1, 1, header.length).setValues([header]);
+    if (chunkData.length > 0) {
+      chunkSheet.getRange(2, 1, chunkData.length, header.length).setValues(chunkData);
+    }
+  }
+  SpreadsheetApp.getUi().alert(`Data has been divided into ${totalParts} named parts using prefix '${prefix}' and numbering '${numberingInput}'.`);
+}
